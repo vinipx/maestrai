@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://github.com/yourusername/maestrai/workflows/tests/badge.svg)](https://github.com/yourusername/maestrai/actions)
+[![Tests](https://github.com/vinipx/maestrai/workflows/Tests/badge.svg)](https://github.com/vinipx/maestrai/actions)
 
 Advanced audio and video transcription service powered by OpenAI Whisper with multi-model support, word-level timestamps, and comprehensive export options.
 
