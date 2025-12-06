@@ -52,7 +52,9 @@ class TranscriptionDemo:
         print()
         while True:
             try:
-                choice = input(f"Enter choice (1-{len(Config.AVAILABLE_MODELS)}) [default: 2]: ").strip()
+                choice = input(
+                    f"Enter choice (1-{len(Config.AVAILABLE_MODELS)}) [default: 2]: "
+                ).strip()
 
                 if not choice:
                     choice = "2"  # Default to base
@@ -235,7 +237,7 @@ class TranscriptionDemo:
                     break
                 else:
                     retry = input("\nTry another file? (y/n): ").strip().lower()
-                    if retry != 'y':
+                    if retry != "y":
                         print("Demo cancelled.")
                         return
 
@@ -335,6 +337,7 @@ Examples:
         print(f"\n❌ Error: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
     finally:

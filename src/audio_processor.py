@@ -277,9 +277,7 @@ class AudioProcessor:
         if end_time <= start_time:
             raise ValueError("End time must be greater than start time")
 
-        logger.info(
-            f"Trimming {input_path.name} from {start_time}s to {end_time}s"
-        )
+        logger.info(f"Trimming {input_path.name} from {start_time}s to {end_time}s")
 
         try:
             duration = end_time - start_time

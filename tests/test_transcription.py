@@ -112,7 +112,13 @@ class TestTranscriptionEngine(unittest.TestCase):
         """Test model info returns proper structure."""
         # Note: This test doesn't actually load the model to save time
         # Just tests the structure
-        info_keys = ["model_name", "device", "cuda_available", "available_models", "supported_languages"]
+        info_keys = [
+            "model_name",
+            "device",
+            "cuda_available",
+            "available_models",
+            "supported_languages",
+        ]
 
         # Create mock info dict
         mock_info = {
@@ -159,11 +165,7 @@ class TestDataClasses(unittest.TestCase):
 
     def test_result_creation(self):
         """Test TranscriptionResult creation."""
-        segments = [
-            TranscriptionSegment(
-                id=0, start=0.0, end=1.0, text="hello world"
-            )
-        ]
+        segments = [TranscriptionSegment(id=0, start=0.0, end=1.0, text="hello world")]
 
         result = TranscriptionResult(
             text="hello world",
@@ -242,6 +244,7 @@ This is the second segment.
     def tearDown(self):
         """Clean up temporary files."""
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
 

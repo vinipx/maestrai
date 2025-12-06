@@ -346,7 +346,9 @@ class TranscriptionEngine:
         try:
             with open(output_path, "w", encoding="utf-8") as f:
                 # Write metadata
-                f.write(f"Transcription of: {result.metadata.get('audio_info', {}).get('filename', 'Unknown')}\n")
+                f.write(
+                    f"Transcription of: {result.metadata.get('audio_info', {}).get('filename', 'Unknown')}\n"
+                )
                 f.write(f"Language: {result.language}\n")
                 f.write(f"Model: {result.model_name}\n")
                 f.write(f"Duration: {result.duration:.2f}s\n")
