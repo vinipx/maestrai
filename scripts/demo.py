@@ -233,6 +233,9 @@ class TranscriptionDemo:
                 # Remove quotes if present
                 file_path = file_path.strip("\"'")
 
+                # Expand user home directory (~)
+                file_path = str(Path(file_path).expanduser())
+
                 if self.validate_and_show_info(file_path):
                     break
                 else:
@@ -260,6 +263,9 @@ class TranscriptionDemo:
             model_name: Model to use (default: base)
         """
         self.print_header()
+
+        # Expand user home directory (~)
+        file_path = str(Path(file_path).expanduser())
 
         print(f"Quick Mode: Transcribing {file_path}")
         print(f"Model: {model_name}\n")
