@@ -5,6 +5,21 @@ import sys
 import logging
 from pathlib import Path
 import argparse
+import ssl
+import certifi
+
+# Fix SSL certificate issues for Whisper model downloads
+# This is a common issue on macOS where Python's SSL certificates may not be properly installed
+try:
+    # Try to use certifi's certificate bundle
+    ssl._create_default_https_context = lambda: ssl.create_default_context(
+        cafile=certifi.where()
+    )
+except Exception:
+    # If that fails, create an unverified context as fallback
+    # Note: This is less secure but allows model downloads to work
+    print("⚠️  SSL certificate verification disabled (unable to use certifi)")
+    ssl._create_default_https_context = ssl._create_unverified_context
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))

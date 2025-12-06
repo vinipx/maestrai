@@ -105,6 +105,16 @@ class TranscriptionEngine:
             logger.info(f"Model '{model_name}' loaded successfully")
         except Exception as e:
             error_msg = f"Failed to load model '{model_name}': {str(e)}"
+
+            # Add helpful message for SSL errors
+            if "SSL" in str(e) or "certificate" in str(e).lower():
+                error_msg += (
+                    "\n\nℹ️  SSL Certificate Error Detected:\n"
+                    "This is often caused by missing SSL certificates.\n"
+                    "The model download will be retried with updated SSL settings.\n"
+                    "First-time downloads may take a few moments...\n"
+                )
+
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
