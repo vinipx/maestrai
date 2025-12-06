@@ -138,10 +138,15 @@ class ScoreGenerator:
         else:
             part.append(clef.TrebleClef())
 
-        # Convert notes
+        # Convert notes - note_data.start is in seconds, need to convert to quarter notes
+        current_tempo = tempo_bpm or result.tempo or 120
+        beats_per_second = current_tempo / 60.0
+
         for note_data in result.notes:
-            n = self._create_note(note_data, tempo_bpm or result.tempo or 120)
-            part.insert(note_data.start, n)
+            n = self._create_note(note_data, current_tempo)
+            # Convert start time from seconds to quarter notes (beats)
+            offset_in_quarters = note_data.start * beats_per_second
+            part.insert(offset_in_quarters, n)
 
         score.append(part)
 
@@ -314,6 +319,14 @@ class ScoreGenerator:
                 "Please install one of these applications."
             )
 
+        logger.info(f"Exporting PDF to: {output_path}")
+
+        # For MIDI files with MuseScore, use directly (better quality)
+        if isinstance(source, (str, Path)) and self.musescore_path:
+            midi_path = Path(source)
+            if midi_path.suffix.lower() in [".mid", ".midi"] and midi_path.exists():
+                return self._export_pdf_musescore(midi_path, output_path)
+
         # Convert source to Score if needed
         if isinstance(source, MusicTranscriptionResult):
             score = self.from_transcription(source)
@@ -321,8 +334,6 @@ class ScoreGenerator:
             score = self.from_midi(source)
         else:
             score = source
-
-        logger.info(f"Exporting PDF to: {output_path}")
 
         try:
             # Try MuseScore first
@@ -336,26 +347,33 @@ class ScoreGenerator:
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
-    def _export_pdf_musescore(self, score: stream.Score, output_path: Path) -> Path:
+    def _export_pdf_musescore(
+        self, score_or_midi: Union[stream.Score, Path], output_path: Path
+    ) -> Path:
         """Export PDF using MuseScore.
 
         Args:
-            score: music21 Score object
+            score_or_midi: music21 Score object or path to MIDI file
             output_path: Output PDF path
 
         Returns:
             Path to created PDF
         """
-        with tempfile.NamedTemporaryFile(suffix=".musicxml", delete=False) as tmp:
-            tmp_path = Path(tmp.name)
+        # If it's a Path to a MIDI file, use it directly
+        if isinstance(score_or_midi, Path) and score_or_midi.exists():
+            input_path = score_or_midi
+            cleanup_needed = False
+        else:
+            # It's a Score object, write to temp MusicXML
+            with tempfile.NamedTemporaryFile(suffix=".musicxml", delete=False) as tmp:
+                input_path = Path(tmp.name)
+            score_or_midi.write("musicxml", fp=str(input_path))
+            cleanup_needed = True
 
         try:
-            # Write MusicXML first
-            score.write("musicxml", fp=str(tmp_path))
-
             # Convert to PDF with MuseScore
             result = subprocess.run(
-                [self.musescore_path, "-o", str(output_path), str(tmp_path)],
+                [self.musescore_path, "-o", str(output_path), str(input_path)],
                 capture_output=True,
                 text=True,
             )
@@ -367,9 +385,9 @@ class ScoreGenerator:
             return output_path
 
         finally:
-            # Cleanup temp file
-            if tmp_path.exists():
-                tmp_path.unlink()
+            # Cleanup temp file if we created one
+            if cleanup_needed and input_path.exists():
+                input_path.unlink()
 
     def _export_pdf_lilypond(self, score: stream.Score, output_path: Path) -> Path:
         """Export PDF using LilyPond.

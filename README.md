@@ -49,20 +49,49 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Quick Run (Recommended)
+
+```bash
+# Music transcription - convert audio to sheet music
+./run.sh music ~/Music/song.mp3
+
+# Speech transcription - convert speech to text
+./run.sh speech ~/Downloads/podcast.mp3
+
+# Show help
+./run.sh --help
+```
+
+**Output files are saved to:** `output/`
+
 ### Music Transcription
 
 ```bash
-# Transcribe music to sheet music
-python scripts/music_demo.py song.mp3
+# Using run.sh (recommended)
+./run.sh music song.mp3
 
-# Interactive mode
-python scripts/music_demo.py
+# Or directly with Python
+python scripts/music_demo.py song.mp3
 ```
 
 **Output:**
-- `song.mid` - MIDI file
-- `song.musicxml` - Sheet music (MusicXML)
-- `song.pdf` - Rendered sheet music (requires MuseScore)
+- `output/song.mid` - MIDI file
+- `output/song.musicxml` - Sheet music (MusicXML)
+- `output/song.pdf` - Rendered sheet music (requires MuseScore)
+
+### Speech Transcription
+
+```bash
+# Using run.sh (recommended)
+./run.sh speech podcast.mp3
+
+# Or directly with Python
+python scripts/demo.py podcast.mp3
+```
+
+**Output:**
+- `output/podcast.srt` - SRT subtitles
+- `output/podcast.txt` - Plain text transcript
 
 ### Programmatic Usage
 

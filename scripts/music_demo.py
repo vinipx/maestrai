@@ -8,9 +8,25 @@ Converts audio recordings into:
 """
 
 import sys
+import os
 import logging
+import warnings
 from pathlib import Path
 import argparse
+
+# Suppress noisy warnings from dependencies BEFORE importing them
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress TensorFlow logging
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", message=".*beam.*")  # music21 beam warnings
+warnings.filterwarnings("ignore", message=".*scikit-learn.*")
+warnings.filterwarnings("ignore", message=".*TensorFlow.*")
+warnings.filterwarnings("ignore", message=".*Torch.*")
+warnings.filterwarnings("ignore", message=".*tflite.*")
+warnings.filterwarnings("ignore", message=".*onnxruntime.*")
+
+# Suppress root logger warnings
+logging.getLogger("root").setLevel(logging.ERROR)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -194,11 +210,12 @@ class MusicTranscriptionDemo:
         except Exception as e:
             print(f"MusicXML export failed: {e}")
 
-        # Try PDF export
+        # Try PDF export - use MIDI file directly for better results
         pdf_path = self.output_dir / f"{base_name}.pdf"
         try:
             if self.score_gen.musescore_path or self.score_gen.lilypond_path:
-                self.score_gen.export_pdf(result, pdf_path)
+                # Use MIDI file directly for PDF generation (more reliable)
+                self.score_gen.export_pdf(midi_path, pdf_path)
                 print(f"PDF exported to: {pdf_path}")
             else:
                 print("PDF export skipped (MuseScore or LilyPond not installed)")
