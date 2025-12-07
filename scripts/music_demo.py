@@ -47,6 +47,9 @@ class MusicTranscriptionDemo:
         # Output directory relative to project root
         self.output_dir = Path(__file__).parent.parent / "output"
         self.output_dir.mkdir(exist_ok=True)
+        # Music metadata
+        self.title = None
+        self.composer = None
 
     def print_header(self):
         """Print demo header."""
@@ -214,6 +217,11 @@ class MusicTranscriptionDemo:
         if chords:
             print(f"Including {len(chords)} chord symbols in score")
 
+        if self.title:
+            print(f"Title: {self.title}")
+        if self.composer:
+            print(f"Composer: {self.composer}")
+
         # Export MIDI
         midi_path = self.output_dir / f"{base_name}.mid"
         try:
@@ -229,6 +237,8 @@ class MusicTranscriptionDemo:
                 result,
                 musicxml_path,
                 chords=chords,
+                title=self.title,
+                composer=self.composer,
             )
             print(f"MusicXML exported to: {musicxml_path}")
         except Exception as e:
@@ -239,7 +249,13 @@ class MusicTranscriptionDemo:
         try:
             if self.score_gen.musescore_path or self.score_gen.lilypond_path:
                 # Export PDF with chord symbols from transcription result
-                self.score_gen.export_pdf(result, pdf_path, chords=chords)
+                self.score_gen.export_pdf(
+                    result,
+                    pdf_path,
+                    chords=chords,
+                    title=self.title,
+                    composer=self.composer,
+                )
                 print(f"PDF exported to: {pdf_path}")
             else:
                 print("PDF export skipped (MuseScore or LilyPond not installed)")
@@ -250,7 +266,9 @@ class MusicTranscriptionDemo:
         print("\n" + "=" * 80)
         print("SCORE PREVIEW")
         print("=" * 80)
-        score = self.score_gen.from_transcription(result, chords=chords)
+        score = self.score_gen.from_transcription(
+            result, chords=chords, title=self.title, composer=self.composer
+        )
         preview = self.score_gen.preview(score)
         print(preview)
 
@@ -292,6 +310,26 @@ class MusicTranscriptionDemo:
                 print("\n\nDemo cancelled.")
                 return
 
+        # Get music metadata (title and composer)
+        print("\n" + "=" * 80)
+        print("MUSIC INFORMATION")
+        print("=" * 80)
+        print("(This information will appear on the sheet music header)")
+
+        try:
+            self.title = input("\nEnter music title (press Enter to skip): ").strip()
+            if not self.title:
+                self.title = Path(file_path).stem.replace("-", " ").replace("_", " ").title()
+                print(f"  Using filename as title: {self.title}")
+
+            self.composer = input("Enter composer/author name (press Enter to skip): ").strip()
+            if not self.composer:
+                self.composer = "Unknown"
+                print(f"  Using default: {self.composer}")
+        except KeyboardInterrupt:
+            print("\n\nDemo cancelled.")
+            return
+
         # Analyze audio
         analysis = self.analyze_audio(file_path)
 
@@ -306,11 +344,13 @@ class MusicTranscriptionDemo:
         print("Demo completed!")
         print("=" * 80 + "\n")
 
-    def run_quick(self, file_path: str):
+    def run_quick(self, file_path: str, title: str = None, composer: str = None):
         """Run quick mode with a single file.
 
         Args:
             file_path: Path to audio file
+            title: Optional title for the sheet music
+            composer: Optional composer name for the sheet music
         """
         self.print_header()
 
@@ -326,6 +366,34 @@ class MusicTranscriptionDemo:
         if not self.initialize_engines():
             print("\nFailed to initialize. Exiting.")
             sys.exit(1)
+
+        # Prompt for title and composer if not provided via CLI
+        print("=" * 80)
+        print("MUSIC INFORMATION")
+        print("=" * 80)
+        print("(This information will appear on the sheet music header)")
+
+        try:
+            if title:
+                self.title = title
+                print(f"\nTitle: {self.title}")
+            else:
+                self.title = input("\nEnter music title (press Enter to skip): ").strip()
+                if not self.title:
+                    self.title = Path(file_path).stem.replace("-", " ").replace("_", " ").title()
+                    print(f"  Using filename as title: {self.title}")
+
+            if composer:
+                self.composer = composer
+                print(f"Composer: {self.composer}")
+            else:
+                self.composer = input("Enter composer/author name (press Enter to skip): ").strip()
+                if not self.composer:
+                    self.composer = "Unknown"
+                    print(f"  Using default: {self.composer}")
+        except KeyboardInterrupt:
+            print("\n\nDemo cancelled.")
+            sys.exit(0)
 
         # Analyze
         analysis = self.analyze_audio(file_path)
@@ -353,6 +421,9 @@ Examples:
   Quick mode:
     python music_demo.py song.mp3
     python music_demo.py piano.wav
+
+  With title and composer:
+    python music_demo.py song.mp3 --title "My Song" --composer "John Doe"
         """,
     )
 
@@ -373,6 +444,18 @@ Examples:
         "--output",
         "-o",
         help="Output directory to write results (default: ./output)",
+    )
+
+    parser.add_argument(
+        "--title",
+        "-t",
+        help="Title for the sheet music header",
+    )
+
+    parser.add_argument(
+        "--composer",
+        "-c",
+        help="Composer/author name for the sheet music header",
     )
 
     parser.add_argument(
@@ -438,69 +521,8 @@ Examples:
 
     try:
         if args.file:
-            # Quick mode: respect export flags
-            # Initialize engines and override export behavior accordingly
-            if not demo.initialize_engines():
-                print(FAILED_INIT_MSG)
-                sys.exit(1)
-
-            analysis = demo.analyze_audio(args.file)
-            result = demo.transcribe_music(args.file, analysis)
-
-            if result:
-                # Export only requested formats; default to all if none specified
-                export_midi = args.midi or (not args.midi and not args.pdf and not args.format)
-                export_pdf = args.pdf or (not args.midi and not args.pdf and not args.format)
-
-                # If --format is specified, interpret it
-                if args.format:
-                    fmt = args.format.lower()
-                    export_midi = fmt in ("midi", "all") or export_midi
-                    export_pdf = fmt in ("musicxml", "all") or export_pdf
-
-                # Use existing export_results but control behavior
-                demo.initialize_engines()
-                # adjust score generator musescore path if attribute exists
-                try:
-                    if hasattr(demo.score_gen, 'musescore_path') and args.musescore_path:
-                        demo.score_gen.musescore_path = args.musescore_path
-                except Exception:
-                    pass
-
-                # Perform exports manually to control which ones run
-                base = Path(args.file).stem
-                # always define midi_path variable to avoid uninitialized reference
-                midi_path = demo.output_dir / f"{base}.mid"
-
-                # Ensure engines are initialized
-                if demo.engine is None or demo.score_gen is None:
-                    raise RuntimeError("Engines not initialized; cannot export results")
-
-                # Get chords from analysis if available
-                chords = analysis.chords if analysis else None
-                if chords:
-                    print(f"Including {len(chords)} chord symbols in score")
-
-                if export_midi:
-                    demo.engine.export_midi(result, midi_path)
-                    print(f"MIDI exported to: {midi_path}")
-
-                musicxml_path = demo.output_dir / f"{base}.musicxml"
-                demo.score_gen.export_musicxml(result, musicxml_path, chords=chords)
-                print(f"MusicXML exported to: {musicxml_path}")
-
-                if export_pdf:
-                    pdf_path = demo.output_dir / f"{base}.pdf"
-                    try:
-                        if demo.score_gen.musescore_path or demo.score_gen.lilypond_path:
-                            demo.score_gen.export_pdf(result, pdf_path, chords=chords)
-                            print(f"PDF exported to: {pdf_path}")
-                        else:
-                            print("PDF export skipped (MuseScore or LilyPond not installed)")
-                    except Exception as e:
-                        print(f"PDF export failed: {e}")
-
-            print("\nQuick transcription completed!\n")
+            # Quick mode with file argument - use run_quick which handles prompts
+            demo.run_quick(args.file, title=args.title, composer=args.composer)
         else:
             demo.run_interactive()
 

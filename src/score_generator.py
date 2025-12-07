@@ -15,7 +15,7 @@ import shutil
 from collections import defaultdict
 
 from music21 import converter, stream, note, chord, meter, key, tempo, clef
-from music21 import harmony
+from music21 import harmony, metadata
 from music21 import environment as m21env
 import pretty_midi
 
@@ -99,6 +99,8 @@ class ScoreGenerator:
         key_signature: Optional[str] = None,
         time_signature: Optional[str] = None,
         chords: Optional[List[AnalysisChord]] = None,
+        title: Optional[str] = None,
+        composer: Optional[str] = None,
     ) -> stream.Score:
         """Create a music21 Score from transcription result.
 
@@ -108,6 +110,8 @@ class ScoreGenerator:
             key_signature: Override key signature
             time_signature: Override time signature
             chords: List of detected chords to add as chord symbols
+            title: Title of the piece for the sheet music header
+            composer: Composer/author name for the sheet music header
 
         Returns:
             music21 Score object
@@ -116,6 +120,13 @@ class ScoreGenerator:
 
         # Create score
         score = stream.Score()
+
+        # Add metadata (title and composer)
+        md = metadata.Metadata()
+        md.title = title or "Untitled"
+        md.composer = composer or "Unknown"
+        score.metadata = md
+
         part = stream.Part()
 
         # Add tempo
@@ -395,6 +406,8 @@ class ScoreGenerator:
         source: Union[stream.Score, MusicTranscriptionResult, str, Path],
         output_path: str | Path,
         chords: Optional[List[AnalysisChord]] = None,
+        title: Optional[str] = None,
+        composer: Optional[str] = None,
     ) -> Path:
         """Export to MusicXML format.
 
@@ -402,6 +415,8 @@ class ScoreGenerator:
             source: music21 Score, MusicTranscriptionResult, or MIDI path
             output_path: Output file path
             chords: List of detected chords to add as chord symbols
+            title: Title of the piece for the sheet music header
+            composer: Composer/author name for the sheet music header
 
         Returns:
             Path to created MusicXML file
@@ -410,7 +425,7 @@ class ScoreGenerator:
 
         # Convert source to Score if needed
         if isinstance(source, MusicTranscriptionResult):
-            score = self.from_transcription(source, chords=chords)
+            score = self.from_transcription(source, chords=chords, title=title, composer=composer)
         elif isinstance(source, (str, Path)):
             score = self.from_midi(source)
             # Add chords to MIDI-loaded score if provided
@@ -419,6 +434,12 @@ class ScoreGenerator:
                 current_tempo = tempo_marks[0].number if tempo_marks else 120
                 beats_per_second = current_tempo / 60.0
                 self._add_chord_symbols(score.parts[0], chords, beats_per_second)
+            # Add metadata for MIDI-loaded scores
+            if title or composer:
+                md = metadata.Metadata()
+                md.title = title or "Untitled"
+                md.composer = composer or "Unknown"
+                score.metadata = md
         else:
             score = source
 
@@ -438,6 +459,8 @@ class ScoreGenerator:
         source: Union[stream.Score, MusicTranscriptionResult, str, Path],
         output_path: str | Path,
         chords: Optional[List[AnalysisChord]] = None,
+        title: Optional[str] = None,
+        composer: Optional[str] = None,
     ) -> Path:
         """Export to PDF format.
 
@@ -447,6 +470,8 @@ class ScoreGenerator:
             source: music21 Score, MusicTranscriptionResult, or MIDI path
             output_path: Output file path
             chords: List of detected chords to add as chord symbols
+            title: Title of the piece for the sheet music header
+            composer: Composer/author name for the sheet music header
 
         Returns:
             Path to created PDF file
@@ -473,7 +498,7 @@ class ScoreGenerator:
 
         # Convert source to Score if needed
         if isinstance(source, MusicTranscriptionResult):
-            score = self.from_transcription(source, chords=chords)
+            score = self.from_transcription(source, chords=chords, title=title, composer=composer)
         elif isinstance(source, (str, Path)):
             score = self.from_midi(source)
             # Add chords to MIDI-loaded score if provided
