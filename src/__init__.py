@@ -26,7 +26,7 @@ from .music_transcription_engine import (
     MusicTranscriptionResult,
     Note,
 )
-from .audio_analyzer import AudioAnalyzer, AudioAnalysis
+from .audio_analyzer import AudioAnalyzer, AudioAnalysis, Chord, Downbeat
 from .score_generator import ScoreGenerator
 
 __all__ = [
@@ -42,5 +42,7 @@ __all__ = [
     "Note",
     "AudioAnalyzer",
     "AudioAnalysis",
+    "Chord",
+    "Downbeat",
     "ScoreGenerator",
 ]

@@ -99,13 +99,31 @@ class MusicTranscriptionDemo:
             print(f"Sample Rate: {analysis.sample_rate} Hz")
             print("-" * 40)
             print(f"Tempo: {analysis.tempo:.1f} BPM")
+            if analysis.tempo_strengths and len(analysis.tempo_strengths) > 1:
+                alt_tempos = ", ".join(
+                    f"{t:.1f} ({s:.2f})" for t, s in analysis.tempo_strengths[:3]
+                )
+                print(f"  Alternative tempos: {alt_tempos}")
             print(f"Key: {analysis.key}")
+            if analysis.key_confidence > 0:
+                print(f"  Key confidence: {analysis.key_confidence:.2f}")
             print(f"Time Signature: {analysis.time_signature}")
             print(f"Beats detected: {len(analysis.beats)}")
+            print(f"Downbeats detected: {len(analysis.downbeats)}")
             print(f"Onsets detected: {len(analysis.onsets)}")
 
+            # Display chord progression
+            if analysis.chords:
+                print(f"Chords detected: {len(analysis.chords)}")
+                print("\nChord Progression (first 10):")
+                print("-" * 40)
+                for chord in analysis.chords[:10]:
+                    print(f"  {chord.start:6.2f}s - {chord.end:6.2f}s: {chord.label}")
+                if len(analysis.chords) > 10:
+                    print(f"  ... and {len(analysis.chords) - 10} more chords")
+
             if analysis.spectral_centroid:
-                print(f"Spectral Centroid: {analysis.spectral_centroid:.1f} Hz")
+                print(f"\nSpectral Centroid: {analysis.spectral_centroid:.1f} Hz")
             if analysis.rms_energy:
                 print(f"RMS Energy: {analysis.rms_energy:.4f}")
 

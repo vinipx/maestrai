@@ -14,7 +14,11 @@ Why this project exists
 Highlights
 - Polyphonic audio-to-MIDI using Basic Pitch
 - MusicXML export and PDF rendering (via MuseScore)
-- Tempo, key, and time-signature analysis (librosa)
+- Advanced audio analysis powered by madmom (neural network-based):
+  - DBN beat/downbeat tracking with RNN activation
+  - CNN-based key detection with confidence scores
+  - Deep chroma chord recognition
+  - Multi-tempo estimation
 - Multi-format outputs: MIDI, MusicXML, PDF
 - Lightweight Python API for integration into tools and pipelines
 
@@ -121,8 +125,21 @@ Example analysis output
 File: piano_song.mp3
 Duration: 173.84 seconds
 Tempo: 136.0 BPM
+  Alternative tempos: 136.0 (0.45), 68.0 (0.32), 272.0 (0.12)
 Key: A# major
+  Key confidence: 0.85
 Time Signature: 4/4
+Beats detected: 394
+Downbeats detected: 99
+Chords detected: 42
+
+Chord Progression (first 5):
+    0.00s -   3.20s: A#:maj
+    3.20s -   6.40s: D#:maj
+    6.40s -   9.60s: Gm
+    9.60s -  12.80s: F:maj
+   12.80s -  16.00s: A#:maj
+
 Notes detected: 1,090
 ```
 
@@ -132,7 +149,7 @@ Project structure
 maestrai/
 ├── src/
 │   ├── music_transcription_engine.py  # Audio to MIDI (Basic Pitch)
-│   ├── audio_analyzer.py              # Tempo/key detection (librosa)
+│   ├── audio_analyzer.py              # Advanced MIR analysis (madmom)
 │   ├── score_generator.py             # MusicXML/PDF export (music21)
 │   ├── audio_processor.py             # Audio file handling
 │   └── utils/
@@ -153,10 +170,16 @@ Requirements
 Key dependencies
 ```
 basic-pitch>=0.3.0    # Spotify's audio-to-MIDI
-librosa>=0.10.0       # Audio analysis
+madmom>=0.16.1        # Neural network-based MIR (beat/chord/key detection)
 music21>=9.1.0        # MusicXML/PDF generation
 pretty_midi>=0.2.10   # MIDI manipulation
 tensorflow>=2.0.0     # Model runtime
+```
+
+Note: For Python 3.10+, install madmom from git for compatibility:
+```bash
+pip install cython
+pip install git+https://github.com/CPJKU/madmom.git
 ```
 
 Testing
