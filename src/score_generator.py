@@ -12,6 +12,8 @@ import tempfile
 import subprocess
 import shutil
 
+from collections import defaultdict
+
 from music21 import converter, stream, note, chord, meter, key, tempo, clef
 from music21 import harmony
 from music21 import environment as m21env
@@ -145,11 +147,41 @@ class ScoreGenerator:
         # Convert notes - note_data.start is in seconds, need to convert to quarter notes
         beats_per_second = current_tempo / 60.0
 
+        # Group notes by their quantized start time
+        notes_by_offset = defaultdict(list)
+
         for note_data in result.notes:
-            n = self._create_note(note_data, current_tempo)
             # Convert start time from seconds to quarter notes (beats)
             offset_in_quarters = note_data.start * beats_per_second
-            part.insert(offset_in_quarters, n)
+            # Quantize to nearest 16th note for grouping
+            quantized_offset = round(offset_in_quarters / 0.25) * 0.25
+            notes_by_offset[quantized_offset].append(note_data)
+
+        # Insert notes - for overlapping notes, create a chord (limit to top 4 by velocity)
+        for offset, notes_at_offset in sorted(notes_by_offset.items()):
+            # Sort by velocity (loudest first) and take top notes
+            sorted_notes = sorted(notes_at_offset, key=lambda n: n.velocity, reverse=True)
+            # Limit chord size to avoid overly complex notation
+            top_notes = sorted_notes[:4]
+
+            if len(top_notes) == 1:
+                n = self._create_note(top_notes[0], current_tempo)
+                part.insert(offset, n)
+            else:
+                # Create a chord from the top notes
+                pitches = []
+                velocities = []
+                durations = []
+                for note_data in top_notes:
+                    n = self._create_note(note_data, current_tempo)
+                    pitches.append(n.pitch)
+                    velocities.append(n.volume.velocity or 64)
+                    durations.append(n.duration.quarterLength)
+
+                c = chord.Chord(pitches)
+                c.duration.quarterLength = sum(durations) / len(durations)
+                c.volume.velocity = sum(velocities) // len(velocities)
+                part.insert(offset, c)
 
         # Add chord symbols if provided
         if chords:
@@ -159,6 +191,27 @@ class ScoreGenerator:
 
         if self.quantize:
             score = self._quantize_score(score)
+
+        # Make proper notation (measures, beams, etc.) for clean rendering
+        score = score.makeNotation()
+
+        # Flatten to single voice to avoid MuseScore rendering issues with multiple voices
+        for p in score.parts:
+            for m in p.getElementsByClass('Measure'):
+                # Get all notes from all voices
+                all_notes = []
+                voices_to_remove = []
+                for v in m.getElementsByClass('Voice'):
+                    all_notes.extend(list(v.notes))
+                    voices_to_remove.append(v)
+
+                # Remove all voices
+                for v in voices_to_remove:
+                    m.remove(v)
+
+                # Re-insert notes directly into measure
+                for n in all_notes:
+                    m.insert(n.offset, n)
 
         logger.info("Score created successfully")
         return score
