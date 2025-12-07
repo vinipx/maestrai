@@ -1,43 +1,37 @@
-# Maestrai - AI-Powered Music & Audio Transcription
+# Maestrai — AI-Powered Music Transcription & Score Generation
 
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://github.com/vinipx/maestrai/workflows/Tests/badge.svg)](https://github.com/vinipx/maestrai/actions)
 
-Transform audio recordings into sheet music with AI. Maestrai combines Spotify's Basic Pitch for music transcription and OpenAI Whisper for speech-to-text.
+Turn audio recordings into playable MIDI and fully rendered sheet music (MusicXML / PDF) using modern ML tools.
+Maestrai focuses on high-quality music transcription (audio → notes → score) powered by Spotify's Basic Pitch and a compact audio analysis pipeline.
 
-## Features
+Why this project exists
+- Convert performances or recordings into editable sheet music quickly.
+- Produce MIDI and MusicXML for DAWs and notation software (MuseScore, Finale, Sibelius).
+- Provide a programmatic API plus simple command-line utilities for batch processing.
 
-### Music Transcription (Phase 2)
-- **Audio to MIDI** - Convert any instrument recording to MIDI
-- **Sheet Music Generation** - Export to MusicXML and PDF
-- **Audio Analysis** - Detect tempo, key signature, time signature
-- **Multi-format Export** - MIDI, MusicXML, PDF output
+Highlights
+- Polyphonic audio-to-MIDI using Basic Pitch
+- MusicXML export and PDF rendering (via MuseScore)
+- Tempo, key, and time-signature analysis (librosa)
+- Multi-format outputs: MIDI, MusicXML, PDF
+- Lightweight Python API for integration into tools and pipelines
 
-### Speech Transcription (Phase 1)
-- **Multi-Model Support** - 5 Whisper models (tiny to large)
-- **Word-Level Timestamps** - Precise timing for every word
-- **99+ Languages** - Automatic language detection
-- **Export Options** - SRT subtitles and text transcripts
+Quick Start
 
-## Quick Start
-
-### Automated Setup
+Automated setup (macOS/Linux):
 
 ```bash
-# macOS/Linux
 ./setup.sh
-
-# Windows
-setup.bat
 ```
 
-### Manual Setup
+Manual setup (venv + pip):
 
 ```bash
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -47,97 +41,82 @@ pip install -r requirements.txt
 # Ubuntu: sudo apt install ffmpeg
 ```
 
-## Usage
-
-### Quick Run (Recommended)
+Usage — CLI (recommended)
 
 ```bash
-# Music transcription - convert audio to sheet music
-./run.sh music ~/Music/song.mp3
+# Music transcription - convert an audio file to score and MIDI
+./run.sh music /path/to/song.mp3
 
-# Speech transcription - convert speech to text
-./run.sh speech ~/Downloads/podcast.mp3
+# Music transcription - convert an audio file to score and MIDI (detailed)
+./run.sh music --input /path/to/song.mp3 --output output/ \
+  --format musicxml --midi --pdf \
+  --model basic-pitch \
+  --sample-rate 44100 \
+  --musescore-path "/Applications/MuseScore 3.app/Contents/MacOS/mscore"
+
+# Short form (if supported by your run.sh wrapper):
+# ./run.sh music -i /path/to/song.mp3 -o output/ --musicxml --midi
 
 # Show help
 ./run.sh --help
 ```
 
-**Output files are saved to:** `output/`
+Default outputs are written to the `output/` directory.
 
-### Music Transcription
-
-```bash
-# Using run.sh (recommended)
-./run.sh music song.mp3
-
-# Or directly with Python
-python scripts/music_demo.py song.mp3
-```
-
-**Output:**
-- `output/song.mid` - MIDI file
-- `output/song.musicxml` - Sheet music (MusicXML)
-- `output/song.pdf` - Rendered sheet music (requires MuseScore)
-
-### Speech Transcription
-
-```bash
-# Using run.sh (recommended)
-./run.sh speech podcast.mp3
-
-# Or directly with Python
-python scripts/demo.py podcast.mp3
-```
-
-**Output:**
-- `output/podcast.srt` - SRT subtitles
-- `output/podcast.txt` - Plain text transcript
-
-### Programmatic Usage
+Usage — Python API
 
 ```python
 from src import MusicTranscriptionEngine, AudioAnalyzer, ScoreGenerator
 
-# Initialize engines
 engine = MusicTranscriptionEngine()
-analyzer = AudioAnalyzer()
-score_gen = ScoreGenerator()
+analysis = AudioAnalyzer().analyze("song.mp3")
+print(f"Tempo: {analysis.tempo} BPM, Key: {analysis.key}")
 
-# Analyze audio
-analysis = analyzer.analyze("song.mp3")
-print(f"Tempo: {analysis.tempo} BPM")
-print(f"Key: {analysis.key}")
-
-# Transcribe to notes
-result = engine.transcribe("song.mp3")
+result = engine.transcribe("song.mp3")  # result contains note events, tempo, meta
 print(f"Notes detected: {result.note_count}")
 
-# Export to various formats
-engine.export_midi(result, "output.mid")
-score_gen.export_musicxml(result, "output.musicxml")
-score_gen.export_pdf(result, "output.pdf")
+# Full example showing the shape of the returned `result` and how to access note events
+from src.music_transcription_engine import MusicTranscriptionEngine
+from src.audio_analyzer import AudioAnalyzer
+from src.score_generator import ScoreGenerator
+
+engine = MusicTranscriptionEngine()  # pass model name via config or constructor if supported by your version
+analysis = AudioAnalyzer().analyze("song.mp3")
+print(f"Tempo: {analysis.tempo} BPM, Key: {analysis.key}")
+
+result = engine.transcribe("song.mp3")
+
+# Typical `result` attributes (example structure):
+# result.duration -> float (seconds)
+# result.tempo -> float (BPM)
+# result.key -> str (e.g. 'C major')
+# result.time_signature -> str (e.g. '4/4')
+# result.note_count -> int
+# result.note_events -> list of dicts, each with keys:
+#    { 'onset': float, 'offset': float, 'duration': float,
+#      'pitch': 'C4', 'midi': 60, 'velocity': int, 'confidence': float }
+
+print(f"Duration: {result.duration:.2f}s, notes: {result.note_count}")
+for n in result.note_events[:10]:
+    print(f"{n['onset']:.3f}s -> {n['duration']:.3f}s | {n['pitch']} (MIDI {n['midi']}) conf={n.get('confidence', 0):.2f}")
+
+# Export outputs
+engine.export_midi(result, "output/song.mid")
+ScoreGenerator().export_musicxml(result, "output/song.musicxml")
+# PDF export requires MuseScore command-line path; configuration may vary by platform
+ScoreGenerator().export_pdf(result, "output/song.pdf")
 ```
 
-### Speech Transcription
+Examples and scripts
+- `scripts/music_demo.py` — one-off music transcription demo
+- `examples/` — small usage examples and batch scripts
 
-```bash
-# Transcribe speech/audio to text
-python scripts/demo.py audio.mp3 --model base
-```
+Outputs
+- output/song.mid — MIDI file (playable)
+- output/song.musicxml — MusicXML (notation interchange)
+- output/song.pdf — Rendered sheet music (MuseScore required)
 
-```python
-from src import TranscriptionEngine
-
-engine = TranscriptionEngine(model_name="base")
-result = engine.transcribe("podcast.mp3")
-
-print(f"Text: {result.text}")
-engine.export_srt(result, "subtitles.srt")
-```
-
-## Output Examples
-
-### Music Analysis
+Example analysis output
 ```
 File: piano_song.mp3
 Duration: 173.84 seconds
@@ -147,38 +126,7 @@ Time Signature: 4/4
 Notes detected: 1,090
 ```
 
-### Generated Sheet Music Preview
-```
-Tempo: 136 BPM
-Key: A# major
-Time Signature: 4/4
-
-Notes:
-  B-3   | offset: 0.12 | dur: 1.00q
-  F4    | offset: 0.50 | dur: 1.00q
-  D5    | offset: 1.00 | dur: 1.00q
-  ...
-```
-
-## Model Comparison
-
-### Music Transcription
-Powered by Spotify's Basic Pitch:
-- Polyphonic (multiple notes at once)
-- Instrument-agnostic
-- Pitch bend detection
-- Lightweight (<20 MB)
-
-### Speech Transcription
-| Model  | Speed    | Accuracy | VRAM   | Best For              |
-|--------|----------|----------|--------|-----------------------|
-| tiny   | Fastest  | Good     | ~1GB   | Quick drafts          |
-| base   | Fast     | Better   | ~1GB   | General use           |
-| small  | Medium   | Great    | ~2GB   | Balanced              |
-| medium | Slow     | Excellent| ~5GB   | High accuracy         |
-| large  | Slowest  | Best     | ~10GB  | Professional work     |
-
-## Project Structure
+Project structure
 
 ```
 maestrai/
@@ -186,91 +134,56 @@ maestrai/
 │   ├── music_transcription_engine.py  # Audio to MIDI (Basic Pitch)
 │   ├── audio_analyzer.py              # Tempo/key detection (librosa)
 │   ├── score_generator.py             # MusicXML/PDF export (music21)
-│   ├── transcription_engine.py        # Speech to text (Whisper)
 │   ├── audio_processor.py             # Audio file handling
 │   └── utils/
-│       └── config.py                  # Configuration
+│       └── config.py
 ├── scripts/
-│   ├── music_demo.py                  # Music transcription demo
-│   └── demo.py                        # Speech transcription demo
-├── tests/
-│   └── test_transcription.py          # Test suite
+│   └── music_demo.py
 ├── examples/
-│   └── *.py                           # Usage examples
+├── tests/
 └── docs/
-    └── *.md                           # Documentation
 ```
 
-## Requirements
-
+Requirements
 - Python 3.9+
-- FFmpeg
-- TensorFlow (for Basic Pitch)
-- MuseScore (optional, for PDF export)
+- FFmpeg (audio handling)
+- TensorFlow (Basic Pitch backend)
+- MuseScore (optional — PDF rendering)
 
-### Key Dependencies
-
+Key dependencies
 ```
-# Music Transcription
 basic-pitch>=0.3.0    # Spotify's audio-to-MIDI
 librosa>=0.10.0       # Audio analysis
-music21>=9.1.0        # Sheet music generation
+music21>=9.1.0        # MusicXML/PDF generation
 pretty_midi>=0.2.10   # MIDI manipulation
-
-# Speech Transcription
-openai-whisper        # Speech-to-text
-torch>=2.0.0          # Deep learning
+tensorflow>=2.0.0     # Model runtime
 ```
 
-## Documentation
-
-- [Setup Guide](docs/SETUP.md) - Installation and configuration
-- [Quick Reference](docs/QUICK_REFERENCE.md) - Common tasks
-- [API Documentation](docs/API.md) - Detailed API reference
-- [Phase 2 Plan](PHASE2_MUSIC_TRANSCRIPTION_PLAN.md) - Music transcription roadmap
-
-## Testing
+Testing
 
 ```bash
-# Run tests
+# Run unit tests
 pytest tests/
 
-# Test with your audio file
+# Try a quick transcription
 python scripts/music_demo.py ~/Music/song.mp3
 ```
 
-## Roadmap
+Documentation
+- docs/SETUP.md — installation and platform notes
+- docs/API.md — API reference
+- docs/QUICK_REFERENCE.md — common tasks and examples
 
-### Phase 1 - Speech Transcription
-- Core Whisper integration
-- Multi-model support
-- Word-level timestamps
-- SRT/TXT export
+Roadmap
+- Phase 2 (current): Full music transcription pipeline — polyphonic audio to MusicXML/PDF
+- Improve accuracy for dense polyphony and percussive instruments
+- Optional web UI and REST API for remote processing
 
-### Phase 2 - Music Transcription
-- Basic Pitch integration
-- Audio analysis (tempo, key)
-- MusicXML export
-- PDF sheet music generation
+Notes about speech transcription
+- The project previously included speech-to-text components; the repository has shifted focus to music transcription and score generation. Any legacy speech scripts are deprecated and may be removed in future releases.
 
-### Phase 3 (Planned)
-- Real-time transcription
-- Web interface
-- REST API
-- MIDI playback
+Contributing
+See `docs/CONTRIBUTING.md` for contribution guidelines, development setup, and testing instructions.
 
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- [Spotify Basic Pitch](https://github.com/spotify/basic-pitch) - Audio-to-MIDI
-- [OpenAI Whisper](https://github.com/openai/whisper) - Speech-to-text
-- [music21](https://web.mit.edu/music21/) - Music notation
-- [librosa](https://librosa.org/) - Audio analysis
-- [FFmpeg](https://ffmpeg.org/) - Audio processing
-
----
-
-Made with love by the Maestrai Team
+License
+MIT — see `LICENSE` for details.
