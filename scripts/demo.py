@@ -12,9 +12,7 @@ import certifi
 # This is a common issue on macOS where Python's SSL certificates may not be properly installed
 try:
     # Try to use certifi's certificate bundle
-    ssl._create_default_https_context = lambda: ssl.create_default_context(
-        cafile=certifi.where()
-    )
+    ssl._create_default_https_context = lambda: ssl.create_default_context(cafile=certifi.where())
 except Exception:
     # If that fails, create an unverified context as fallback
     # Note: This is less secure but allows model downloads to work
@@ -36,6 +34,9 @@ class TranscriptionDemo:
         """Initialize the demo."""
         self.engine = None
         self.processor = AudioProcessor()
+        # Output directory relative to project root
+        self.output_dir = Path(__file__).parent.parent / "output"
+        self.output_dir.mkdir(exist_ok=True)
 
     def print_header(self):
         """Print demo header."""
@@ -206,21 +207,23 @@ class TranscriptionDemo:
         original_path = Path(original_file)
         base_name = original_path.stem
 
+        print(f"\nOutput directory: {self.output_dir}")
+
         # Export SRT
-        srt_path = original_path.parent / f"{base_name}.srt"
+        srt_path = self.output_dir / f"{base_name}.srt"
         try:
             self.engine.export_srt(result, srt_path)
-            print(f"✅ SRT exported to: {srt_path}")
+            print(f"SRT exported to: {srt_path}")
         except Exception as e:
-            print(f"❌ SRT export failed: {e}")
+            print(f"SRT export failed: {e}")
 
         # Export TXT
-        txt_path = original_path.parent / f"{base_name}.txt"
+        txt_path = self.output_dir / f"{base_name}.txt"
         try:
             self.engine.export_txt(result, txt_path)
-            print(f"✅ Text exported to: {txt_path}")
+            print(f"Text exported to: {txt_path}")
         except Exception as e:
-            print(f"❌ Text export failed: {e}")
+            print(f"Text export failed: {e}")
 
     def run_interactive(self):
         """Run interactive mode."""

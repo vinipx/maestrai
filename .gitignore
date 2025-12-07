@@ -49,6 +49,7 @@ coverage.xml
 *.log
 .pytest_cache/
 htmlcov/
+log.txt
 
 # Type checking
 .mypy_cache/
