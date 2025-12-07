@@ -138,7 +138,7 @@ class MusicTranscriptionDemo:
                 result.key = analysis.key
                 result.time_signature = analysis.time_signature
 
-            print(f"\nTranscription completed!")
+            print("\nTranscription completed!")
             print("-" * 40)
             print(f"Notes detected: {result.note_count}")
             print(f"Duration: {result.duration:.2f} seconds")
@@ -151,13 +151,13 @@ class MusicTranscriptionDemo:
 
             # Show statistics
             stats = self.engine.get_statistics(result)
-            print(f"\nStatistics:")
+            print("\nStatistics:")
             print(f"  Notes per second: {stats['notes_per_second']:.2f}")
             print(f"  Average velocity: {stats['average_velocity']:.1f}")
             print(f"  Average note duration: {stats['average_note_duration']:.3f}s")
 
             # Show first few notes
-            print(f"\nFirst 10 notes:")
+            print("\nFirst 10 notes:")
             print("-" * 40)
             for note in result.notes[:10]:
                 print(f"  {note}")
@@ -174,12 +174,12 @@ class MusicTranscriptionDemo:
             traceback.print_exc()
             return None
 
-    def export_results(self, result, analysis, original_file: str):
+    def export_results(self, result, _analysis, original_file: str):
         """Export results to various formats.
 
         Args:
             result: MusicTranscriptionResult object
-            analysis: AudioAnalysis object
+            _analysis: (unused) AudioAnalysis object (kept for compatibility)
             original_file: Original audio file path
         """
         print("\n" + "=" * 80)
@@ -344,6 +344,45 @@ Examples:
         help="Enable verbose logging",
     )
 
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Output directory to write results (default: ./output)",
+    )
+
+    parser.add_argument(
+        "--format",
+        help="Preferred export format (musicxml, midi)",
+    )
+
+    parser.add_argument(
+        "--midi",
+        action="store_true",
+        help="Export MIDI file",
+    )
+
+    parser.add_argument(
+        "--pdf",
+        action="store_true",
+        help="Export PDF (requires MuseScore or LilyPond)",
+    )
+
+    parser.add_argument(
+        "--model",
+        help="Model name to use for transcription (e.g. basic-pitch)",
+    )
+
+    parser.add_argument(
+        "--sample-rate",
+        type=int,
+        help="Resample input to this sample rate (Hz)",
+    )
+
+    parser.add_argument(
+        "--musescore-path",
+        help="Path to MuseScore binary for PDF export",
+    )
+
     args = parser.parse_args()
 
     # Configure logging
@@ -356,9 +395,82 @@ Examples:
     # Create demo instance
     demo = MusicTranscriptionDemo()
 
+    # Set optional runtime config from CLI
+    if args.output:
+        demo.output_dir = Path(args.output)
+        demo.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Pass model selection via environment or attribute if supported
+    if args.model:
+        # Some engine versions accept a model name; set attribute for backward compatibility
+        demo.engine = None
+        MusicTranscriptionEngine.default_model = args.model
+
+    # Configure ScoreGenerator musescore path if provided
+    if args.musescore_path:
+        # Ensure score generator instance gets the musescore path on initialization
+        ScoreGenerator.default_musescore_path = args.musescore_path
+
     try:
         if args.file:
-            demo.run_quick(args.file)
+            # Quick mode: respect export flags
+            # Initialize engines and override export behavior accordingly
+            if not demo.initialize_engines():
+                print(FAILED_INIT_MSG)
+                sys.exit(1)
+
+            analysis = demo.analyze_audio(args.file)
+            result = demo.transcribe_music(args.file, analysis)
+
+            if result:
+                # Export only requested formats; default to all if none specified
+                export_midi = args.midi or (not args.midi and not args.pdf and not args.format)
+                export_pdf = args.pdf or (not args.midi and not args.pdf and not args.format)
+
+                # If --format is specified, interpret it
+                if args.format:
+                    fmt = args.format.lower()
+                    export_midi = fmt in ("midi", "all") or export_midi
+                    export_pdf = fmt in ("musicxml", "all") or export_pdf
+
+                # Use existing export_results but control behavior
+                demo.initialize_engines()
+                # adjust score generator musescore path if attribute exists
+                try:
+                    if hasattr(demo.score_gen, 'musescore_path') and args.musescore_path:
+                        demo.score_gen.musescore_path = args.musescore_path
+                except Exception:
+                    pass
+
+                # Perform exports manually to control which ones run
+                base = Path(args.file).stem
+                # always define midi_path variable to avoid uninitialized reference
+                midi_path = demo.output_dir / f"{base}.mid"
+
+                # Ensure engines are initialized
+                if demo.engine is None or demo.score_gen is None:
+                    raise RuntimeError("Engines not initialized; cannot export results")
+
+                if export_midi:
+                    demo.engine.export_midi(result, midi_path)
+                    print(f"MIDI exported to: {midi_path}")
+
+                musicxml_path = demo.output_dir / f"{base}.musicxml"
+                demo.score_gen.export_musicxml(result, musicxml_path)
+                print(f"MusicXML exported to: {musicxml_path}")
+
+                if export_pdf:
+                    pdf_path = demo.output_dir / f"{base}.pdf"
+                    try:
+                        if demo.score_gen.musescore_path or demo.score_gen.lilypond_path:
+                            demo.score_gen.export_pdf(midi_path, pdf_path)
+                            print(f"PDF exported to: {pdf_path}")
+                        else:
+                            print("PDF export skipped (MuseScore or LilyPond not installed)")
+                    except Exception as e:
+                        print(f"PDF export failed: {e}")
+
+            print("\nQuick transcription completed!\n")
         else:
             demo.run_interactive()
 
