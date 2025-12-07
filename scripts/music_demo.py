@@ -192,12 +192,12 @@ class MusicTranscriptionDemo:
             traceback.print_exc()
             return None
 
-    def export_results(self, result, _analysis, original_file: str):
+    def export_results(self, result, analysis, original_file: str):
         """Export results to various formats.
 
         Args:
             result: MusicTranscriptionResult object
-            _analysis: (unused) AudioAnalysis object (kept for compatibility)
+            analysis: AudioAnalysis object with chord information
             original_file: Original audio file path
         """
         print("\n" + "=" * 80)
@@ -209,6 +209,11 @@ class MusicTranscriptionDemo:
 
         print(f"\nOutput directory: {self.output_dir}")
 
+        # Get chords from analysis if available
+        chords = analysis.chords if analysis else None
+        if chords:
+            print(f"Including {len(chords)} chord symbols in score")
+
         # Export MIDI
         midi_path = self.output_dir / f"{base_name}.mid"
         try:
@@ -217,34 +222,36 @@ class MusicTranscriptionDemo:
         except Exception as e:
             print(f"MIDI export failed: {e}")
 
-        # Export MusicXML
+        # Export MusicXML with chord symbols
         musicxml_path = self.output_dir / f"{base_name}.musicxml"
         try:
             self.score_gen.export_musicxml(
                 result,
                 musicxml_path,
+                chords=chords,
             )
             print(f"MusicXML exported to: {musicxml_path}")
         except Exception as e:
             print(f"MusicXML export failed: {e}")
 
-        # Try PDF export - use MIDI file directly for better results
+        # Try PDF export with chord symbols
         pdf_path = self.output_dir / f"{base_name}.pdf"
         try:
             if self.score_gen.musescore_path or self.score_gen.lilypond_path:
-                # Use MIDI file directly for PDF generation (more reliable)
-                self.score_gen.export_pdf(midi_path, pdf_path)
+                # Export PDF with chord symbols from transcription result
+                self.score_gen.export_pdf(result, pdf_path, chords=chords)
                 print(f"PDF exported to: {pdf_path}")
             else:
                 print("PDF export skipped (MuseScore or LilyPond not installed)")
         except Exception as e:
             print(f"PDF export failed: {e}")
 
-        # Show score preview
+        # Show score preview (with chords)
         print("\n" + "=" * 80)
         print("SCORE PREVIEW")
         print("=" * 80)
-        preview = self.score_gen.preview(result)
+        score = self.score_gen.from_transcription(result, chords=chords)
+        preview = self.score_gen.preview(score)
         print(preview)
 
     def run_interactive(self):
@@ -469,19 +476,24 @@ Examples:
                 if demo.engine is None or demo.score_gen is None:
                     raise RuntimeError("Engines not initialized; cannot export results")
 
+                # Get chords from analysis if available
+                chords = analysis.chords if analysis else None
+                if chords:
+                    print(f"Including {len(chords)} chord symbols in score")
+
                 if export_midi:
                     demo.engine.export_midi(result, midi_path)
                     print(f"MIDI exported to: {midi_path}")
 
                 musicxml_path = demo.output_dir / f"{base}.musicxml"
-                demo.score_gen.export_musicxml(result, musicxml_path)
+                demo.score_gen.export_musicxml(result, musicxml_path, chords=chords)
                 print(f"MusicXML exported to: {musicxml_path}")
 
                 if export_pdf:
                     pdf_path = demo.output_dir / f"{base}.pdf"
                     try:
                         if demo.score_gen.musescore_path or demo.score_gen.lilypond_path:
-                            demo.score_gen.export_pdf(midi_path, pdf_path)
+                            demo.score_gen.export_pdf(result, pdf_path, chords=chords)
                             print(f"PDF exported to: {pdf_path}")
                         else:
                             print("PDF export skipped (MuseScore or LilyPond not installed)")

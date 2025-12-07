@@ -13,10 +13,12 @@ import subprocess
 import shutil
 
 from music21 import converter, stream, note, chord, meter, key, tempo, clef
+from music21 import harmony
 from music21 import environment as m21env
 import pretty_midi
 
 from .music_transcription_engine import MusicTranscriptionResult, Note
+from .audio_analyzer import Chord as AnalysisChord
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,7 @@ class ScoreGenerator:
         tempo_bpm: Optional[float] = None,
         key_signature: Optional[str] = None,
         time_signature: Optional[str] = None,
+        chords: Optional[List[AnalysisChord]] = None,
     ) -> stream.Score:
         """Create a music21 Score from transcription result.
 
@@ -102,6 +105,7 @@ class ScoreGenerator:
             tempo_bpm: Override tempo (BPM)
             key_signature: Override key signature
             time_signature: Override time signature
+            chords: List of detected chords to add as chord symbols
 
         Returns:
             music21 Score object
@@ -113,9 +117,9 @@ class ScoreGenerator:
         part = stream.Part()
 
         # Add tempo
-        if tempo_bpm or result.tempo:
-            tempo_mark = tempo.MetronomeMark(number=tempo_bpm or result.tempo or 120)
-            part.append(tempo_mark)
+        current_tempo = tempo_bpm or result.tempo or 120
+        tempo_mark = tempo.MetronomeMark(number=current_tempo)
+        part.append(tempo_mark)
 
         # Add time signature
         ts_str = time_signature or result.time_signature or self.default_time_signature
@@ -139,7 +143,6 @@ class ScoreGenerator:
             part.append(clef.TrebleClef())
 
         # Convert notes - note_data.start is in seconds, need to convert to quarter notes
-        current_tempo = tempo_bpm or result.tempo or 120
         beats_per_second = current_tempo / 60.0
 
         for note_data in result.notes:
@@ -148,6 +151,10 @@ class ScoreGenerator:
             offset_in_quarters = note_data.start * beats_per_second
             part.insert(offset_in_quarters, n)
 
+        # Add chord symbols if provided
+        if chords:
+            self._add_chord_symbols(part, chords, beats_per_second)
+
         score.append(part)
 
         if self.quantize:
@@ -155,6 +162,79 @@ class ScoreGenerator:
 
         logger.info("Score created successfully")
         return score
+
+    def _add_chord_symbols(
+        self,
+        part: stream.Part,
+        chords: List[AnalysisChord],
+        beats_per_second: float,
+    ) -> None:
+        """Add chord symbols to a part.
+
+        Args:
+            part: music21 Part to add chords to
+            chords: List of AnalysisChord objects from audio analysis
+            beats_per_second: Conversion factor from seconds to beats
+        """
+        for chord_data in chords:
+            # Skip "N" (no chord) labels
+            if chord_data.label == "N":
+                continue
+
+            # Convert chord label to music21 format
+            chord_symbol = self._convert_chord_label(chord_data.label)
+            if chord_symbol:
+                try:
+                    # Create chord symbol
+                    cs = harmony.ChordSymbol(chord_symbol)
+                    # Convert start time from seconds to quarter notes
+                    offset_in_quarters = chord_data.start * beats_per_second
+                    part.insert(offset_in_quarters, cs)
+                    logger.debug(f"Added chord {chord_symbol} at {offset_in_quarters:.2f}")
+                except Exception as e:
+                    logger.warning(f"Could not add chord '{chord_data.label}': {e}")
+
+    def _convert_chord_label(self, label: str) -> Optional[str]:
+        """Convert madmom chord label to music21 format.
+
+        Args:
+            label: Chord label from madmom (e.g., "C:maj", "A:min", "G:7")
+
+        Returns:
+            music21 compatible chord symbol or None if not convertible
+        """
+        if not label or label == "N":
+            return None
+
+        # Handle madmom format: "C:maj", "A:min", "G:7", "D:min7", etc.
+        if ":" in label:
+            root, quality = label.split(":", 1)
+        else:
+            # Simple format like "C" or "Am"
+            root = label
+            quality = ""
+
+        # Normalize root note (handle flats/sharps)
+        root = root.replace("b", "-")  # music21 uses - for flat
+
+        # Convert quality to music21 format
+        quality_map = {
+            "maj": "",
+            "min": "m",
+            "dim": "dim",
+            "aug": "aug",
+            "7": "7",
+            "maj7": "maj7",
+            "min7": "m7",
+            "dim7": "dim7",
+            "hdim7": "m7b5",
+            "sus4": "sus4",
+            "sus2": "sus2",
+            "": "",
+        }
+
+        m21_quality = quality_map.get(quality, quality)
+        return f"{root}{m21_quality}"
 
     def from_midi(
         self,
@@ -261,12 +341,14 @@ class ScoreGenerator:
         self,
         source: Union[stream.Score, MusicTranscriptionResult, str, Path],
         output_path: str | Path,
+        chords: Optional[List[AnalysisChord]] = None,
     ) -> Path:
         """Export to MusicXML format.
 
         Args:
             source: music21 Score, MusicTranscriptionResult, or MIDI path
             output_path: Output file path
+            chords: List of detected chords to add as chord symbols
 
         Returns:
             Path to created MusicXML file
@@ -275,9 +357,15 @@ class ScoreGenerator:
 
         # Convert source to Score if needed
         if isinstance(source, MusicTranscriptionResult):
-            score = self.from_transcription(source)
+            score = self.from_transcription(source, chords=chords)
         elif isinstance(source, (str, Path)):
             score = self.from_midi(source)
+            # Add chords to MIDI-loaded score if provided
+            if chords and score.parts:
+                tempo_marks = list(score.recurse().getElementsByClass(tempo.MetronomeMark))
+                current_tempo = tempo_marks[0].number if tempo_marks else 120
+                beats_per_second = current_tempo / 60.0
+                self._add_chord_symbols(score.parts[0], chords, beats_per_second)
         else:
             score = source
 
@@ -296,6 +384,7 @@ class ScoreGenerator:
         self,
         source: Union[stream.Score, MusicTranscriptionResult, str, Path],
         output_path: str | Path,
+        chords: Optional[List[AnalysisChord]] = None,
     ) -> Path:
         """Export to PDF format.
 
@@ -304,6 +393,7 @@ class ScoreGenerator:
         Args:
             source: music21 Score, MusicTranscriptionResult, or MIDI path
             output_path: Output file path
+            chords: List of detected chords to add as chord symbols
 
         Returns:
             Path to created PDF file
@@ -321,17 +411,24 @@ class ScoreGenerator:
 
         logger.info(f"Exporting PDF to: {output_path}")
 
-        # For MIDI files with MuseScore, use directly (better quality)
-        if isinstance(source, (str, Path)) and self.musescore_path:
+        # For MIDI files with MuseScore, we need to add chords via MusicXML
+        # if chords are provided, so skip the direct MIDI path
+        if isinstance(source, (str, Path)) and self.musescore_path and not chords:
             midi_path = Path(source)
             if midi_path.suffix.lower() in [".mid", ".midi"] and midi_path.exists():
                 return self._export_pdf_musescore(midi_path, output_path)
 
         # Convert source to Score if needed
         if isinstance(source, MusicTranscriptionResult):
-            score = self.from_transcription(source)
+            score = self.from_transcription(source, chords=chords)
         elif isinstance(source, (str, Path)):
             score = self.from_midi(source)
+            # Add chords to MIDI-loaded score if provided
+            if chords and score.parts:
+                tempo_marks = list(score.recurse().getElementsByClass(tempo.MetronomeMark))
+                current_tempo = tempo_marks[0].number if tempo_marks else 120
+                beats_per_second = current_tempo / 60.0
+                self._add_chord_symbols(score.parts[0], chords, beats_per_second)
         else:
             score = source
 
@@ -489,6 +586,18 @@ class ScoreGenerator:
                 lines.append(f"Key: {el.name}")
             elif isinstance(el, meter.TimeSignature):
                 lines.append(f"Time Signature: {el.ratioString}")
+
+        # Get chord symbols
+        chord_symbols = list(score.recurse().getElementsByClass(harmony.ChordSymbol))
+        if chord_symbols:
+            lines.append("")
+            lines.append("-" * 60)
+            lines.append(f"Chord Symbols ({len(chord_symbols)} total, first 10):")
+            lines.append("-" * 60)
+            for cs in chord_symbols[:10]:
+                lines.append(f"  {cs.figure:8} | offset: {cs.offset:6.2f}")
+            if len(chord_symbols) > 10:
+                lines.append(f"  ... and {len(chord_symbols) - 10} more chords")
 
         lines.append("")
         lines.append("-" * 60)
